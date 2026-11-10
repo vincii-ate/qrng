@@ -10,7 +10,7 @@
 
 This project uses quantum mechanical superposition to generate true random bits on real IBM Quantum superconducting hardware, with comparisons against noisy quantum simulations and classical pseudo-random number generators.
 
-### 👤 For Person 2 (Statistical Analysis & Comparison)
+### 👤 For Mike (Person 2: Statistical Analysis & Comparison)
 You **do not need Qiskit installed** to perform your analysis.
 - **Your Primary Input Data**: 
   - [`data/quantum_bits_hardware.json`](file:///c:/Users/temi/.gemini/antigravity/scratch/qrng/data/quantum_bits_hardware.json) — 1,000 bits measured on real physical hardware (`ibm_fez`, job `dbpl46oqtr0c738ek6hg`).
@@ -48,7 +48,7 @@ You **do not need Qiskit installed** to perform your analysis.
 
 ---
 
-### 👤 For Person 3 (Presentation, Storyline & Explanations)
+### 👤 For Evans (Person 3: Presentation, Storyline & Explanations)
 Here are the core concepts and findings you can present:
 - **Physical Superposition**: We place 8 superconducting qubits into an equal superposition state using Hadamard ($H$) gates:
   $$H|0\rangle = \frac{|0\rangle + |1\rangle}{\sqrt{2}}$$
@@ -161,3 +161,4 @@ python -m unittest test_quantum_engine.py
 - **Hardware Hero (+5)**: Real physical quantum computer execution demonstrated and recorded on `ibm_fez` (Job `dbpl46oqtr0c738ek6hg`).
 - **Noise Detective (+5)**: Explainable noise model implemented and benchmarked in [`data/quantum_bits_noisy.json`](file:///c:/Users/temi/.gemini/antigravity/scratch/qrng/data/quantum_bits_noisy.json).
 - **Clean Code (+5)**: Type hints, docstrings, strict input validation, zero credentials committed, and 100% test pass rate.
+
