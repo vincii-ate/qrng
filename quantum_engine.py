@@ -1,7 +1,7 @@
 """Quantum Random Number Generator (QRNG) - Quantum Engine Module.
 
 Developed for Person 1 (Quantum Engine) in the AstraCode Qiskit Fall Fest 2026.
-Provides circuit generation, ideal and noisy simulation, hardware execution,
+Provides circuit generation, hardware execution, simulation for tests,
 bit-to-number conversion, and dataset persistence.
 """
 
@@ -24,9 +24,13 @@ DEFAULT_QUBITS = 8
 DEFAULT_N_BITS = 1000
 MIN_QUBITS = 1
 MAX_QUBITS = 16
-VALID_BACKENDS = ("ideal", "noisy", "hardware")
+VALID_BACKENDS = ("hardware", "ideal", "noisy")
 
-# Noise model parameters
+# Tracking the last executed hardware metadata
+LAST_HARDWARE_BACKEND: str | None = None
+LAST_HARDWARE_JOB_ID: str | None = None
+
+# Offline noisy simulation parameters (chosen model, not a measurement of any real device)
 DEP_GATE_ERROR_RATE = 0.02
 READOUT_PROB_1_GIVEN_0 = 0.05
 READOUT_PROB_0_GIVEN_1 = 0.12
@@ -57,6 +61,9 @@ def build_qrng_circuit(n_qubits: int = DEFAULT_QUBITS) -> QuantumCircuit:
 def make_noisy_simulator() -> AerSimulator:
     """Build an explainable noisy Aer simulator for the Noise Detective track.
 
+    Note: This is a chosen educational noise model, not a physical measurement
+    of any specific real hardware device.
+
     Returns:
         AerSimulator: Simulator configured with gate depolarizing and readout errors.
     """
@@ -66,7 +73,7 @@ def make_noisy_simulator() -> AerSimulator:
         depolarizing_error(DEP_GATE_ERROR_RATE, 1), ["h"]
     )
     # Readout error: P(1|0)=5%, P(0|1)=12%
-    # Real physical devices read 1s less reliably, creating a slight bias towards 0
+    # Real physical devices read 1s less reliably, creating an asymmetric bias towards 0
     readout_matrix = [
         [1.0 - READOUT_PROB_1_GIVEN_0, READOUT_PROB_1_GIVEN_0],
         [READOUT_PROB_0_GIVEN_1, 1.0 - READOUT_PROB_0_GIVEN_1],
@@ -89,8 +96,9 @@ def _run_on_simulator(
     return result.get_memory()
 
 
-def _run_on_hardware(qc: QuantumCircuit, shots: int) -> tuple[list[str], str]:
+def _run_on_hardware(qc: QuantumCircuit, shots: int) -> tuple[list[str], str, str]:
     """Execute circuit on real IBM Quantum hardware backend."""
+    global LAST_HARDWARE_BACKEND, LAST_HARDWARE_JOB_ID
     token = os.environ.get("IBM_QUANTUM_TOKEN")
     if not token:
         raise RuntimeError(
@@ -100,8 +108,11 @@ def _run_on_hardware(qc: QuantumCircuit, shots: int) -> tuple[list[str], str]:
             "https://quantum.cloud.ibm.com."
         )
     instance = os.environ.get("IBM_QUANTUM_INSTANCE")
+    channel = os.environ.get("IBM_QUANTUM_CHANNEL") or (
+        "ibm_cloud" if instance and "bluemix" in instance else "ibm_quantum_platform"
+    )
     service = QiskitRuntimeService(
-        channel="ibm_quantum_platform",
+        channel=channel,
         token=token,
         instance=instance,
     )
@@ -116,13 +127,15 @@ def _run_on_hardware(qc: QuantumCircuit, shots: int) -> tuple[list[str], str]:
     job = sampler.run([isa_circuit], shots=shots)
     print(f"Submitted hardware job {job.job_id()} to backend {backend_obj.name}")
     bitstrings = job.result()[0].data.c.get_bitstrings()
-    return bitstrings, backend_obj.name
+    LAST_HARDWARE_BACKEND = backend_obj.name
+    LAST_HARDWARE_JOB_ID = job.job_id()
+    return bitstrings, backend_obj.name, job.job_id()
 
 
 def generate_bits(
     n_bits: int = DEFAULT_N_BITS,
     n_qubits: int = DEFAULT_QUBITS,
-    backend: str = "ideal",
+    backend: str = "hardware",
     seed: int | None = None,
 ) -> list[int]:
     """Generate a bitstream of random binary digits using quantum circuits.
@@ -130,7 +143,7 @@ def generate_bits(
     Args:
         n_bits: Exact number of bits to generate (must be > 0).
         n_qubits: Qubits per circuit execution (1 to 16).
-        backend: Target backend ('ideal', 'noisy', or 'hardware').
+        backend: Target backend ('hardware' by default, or 'ideal', 'noisy' for offline testing).
         seed: Random seed for simulator repeatability (None for fresh runs).
 
     Returns:
@@ -150,14 +163,14 @@ def generate_bits(
     qc = build_qrng_circuit(n_qubits=n_qubits)
     shots = math.ceil(n_bits / n_qubits)
 
-    if backend == "ideal":
+    if backend == "hardware":
+        shot_memory, _, _ = _run_on_hardware(qc, shots)
+    elif backend == "ideal":
         sim = AerSimulator()
         shot_memory = _run_on_simulator(qc, shots, sim, seed)
     elif backend == "noisy":
         sim = make_noisy_simulator()
         shot_memory = _run_on_simulator(qc, shots, sim, seed)
-    elif backend == "hardware":
-        shot_memory, _ = _run_on_hardware(qc, shots)
     else:
         raise ValueError(f"Unsupported backend '{backend}'")
 
@@ -198,7 +211,7 @@ def save_bits(bits: list[int], path: str | Path, **metadata) -> Path:
     Args:
         bits: List of binary digits.
         path: Destination file path.
-        **metadata: Optional metadata keys (source, n_qubits, seed, etc.).
+        **metadata: Optional metadata keys (source, n_qubits, seed, job_id, etc.).
 
     Returns:
         Path: Path to saved file.
@@ -206,10 +219,11 @@ def save_bits(bits: list[int], path: str | Path, **metadata) -> Path:
     output_path = Path(path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     payload = {
-        "source": metadata.get("source", "aer_simulator"),
+        "source": metadata.get("source", "unknown"),
         "n_qubits": metadata.get("n_qubits", DEFAULT_QUBITS),
         "n_bits": len(bits),
         "seed": metadata.get("seed", None),
+        "job_id": metadata.get("job_id", None),
         "created": metadata.get("created", datetime.now().isoformat()),
         "bits": bits,
     }
@@ -249,4 +263,3 @@ def load_dataset(path: str | Path) -> dict:
     input_path = Path(path)
     with open(input_path, "r", encoding="utf-8") as f:
         return json.load(f)
-

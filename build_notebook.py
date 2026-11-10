@@ -1,24 +1,47 @@
-"""Script to build and execute person1_quantum_engine.ipynb top to bottom."""
+"""Builds person1_quantum_engine.ipynb conforming to the strict hardware-only spec."""
 
 import nbformat as nbf
-from nbclient import NotebookClient
 
 nb = nbf.v4.new_notebook()
+nb.metadata = {
+    "kernelspec": {
+        "display_name": "Python (.venv)",
+        "language": "python",
+        "name": "qrng-venv"
+    },
+    "language_info": {
+        "name": "python",
+        "version": "3.11.9"
+    }
+}
+
 cells = []
 
-# Cell 1: Markdown Introduction
-cells.append(nbf.v4.new_markdown_cell("""# Quantum Random Number Generator (QRNG) - Quantum Engine
-### AstraCode Qiskit Fall Fest 2026 Hackathon | Person 1 Deliverable
+# Step 1: Intro (markdown)
+# Must contain exact phrasing from spec:
+# "We use qubits in superposition to generate random bits on a real IBM quantum computer, combine them into random numbers, and later compare them with Python's random module."
+cells.append(nbf.v4.new_markdown_cell("""# Quantum Random Number Generator (QRNG) on IBM Quantum Hardware
+### AstraCode Qiskit Fall Fest 2026 | Person 1 Deliverable
 
-This notebook demonstrates the core quantum engine for **Project 4: Quantum Random Number Generator**.
-- **Physical principle**: Putting qubits into an equal superposition of $|0\\rangle$ and $|1\\rangle$ using Hadamard ($H$) gates, then measuring them.
-- **Contract**: Generates ordered bitstreams and 8-bit integers, persisted in JSON format for statistical analysis by Person 2 and presentation by Person 3.
+We use qubits in superposition to generate random bits on a real IBM quantum computer, combine them into random numbers, and later compare them with Python's `random` module.
 """))
 
-# Cell 2: Code Imports
-cells.append(nbf.v4.new_code_cell("""import os
+# Step 2: Setup (markdown + code)
+cells.append(nbf.v4.new_markdown_cell("""### Step 2: Environment and Package Setup
+Load required modules and verify installed Qiskit versions.
+"""))
+
+cells.append(nbf.v4.new_code_cell("""# Colab installation (uncomment if running on Google Colab):
+# !pip install qiskit qiskit-ibm-runtime matplotlib
+
+import os
 import matplotlib.pyplot as plt
+import qiskit
+import qiskit_ibm_runtime
 from qiskit import QuantumCircuit
+from qiskit_ibm_runtime import QiskitRuntimeService, SamplerV2 as Sampler
+from qiskit.transpiler.preset_passmanagers import generate_preset_pass_manager
+
 from quantum_engine import (
     build_qrng_circuit,
     generate_bits,
@@ -26,141 +49,182 @@ from quantum_engine import (
     save_bits,
     load_bits,
     load_dataset,
-    make_noisy_simulator,
 )
 
-print("Quantum Engine module imported successfully!")
+%matplotlib inline
+
+print(f"qiskit version: {qiskit.__version__}")
+print(f"qiskit-ibm-runtime version: {qiskit_ibm_runtime.__version__}")
+
+# Closing check: imports succeed and versions are present
+assert hasattr(qiskit, "__version__"), "Qiskit import check failed"
+assert hasattr(qiskit_ibm_runtime, "__version__"), "Qiskit Runtime import check failed"
 """))
 
-# Cell 3: Markdown 1-qubit coin
-cells.append(nbf.v4.new_markdown_cell("""## 1. Single Qubit Quantum Coin
-A single qubit initialized in $|0\\rangle$ undergoes a Hadamard transformation:
+# Step 3: The circuit (markdown + code)
+cells.append(nbf.v4.new_markdown_cell("""### Step 3: The Quantum Circuit
+We apply a Hadamard ($H$) gate to every qubit to prepare an equal superposition state:
 $$H|0\\rangle = \\frac{|0\\rangle + |1\\rangle}{\\sqrt{2}}$$
-Upon measurement, the quantum superposition collapses into either $0$ or $1$ with equal 50% probability.
+Each qubit has an equal 50% probability of being measured in state $0$ or state $1$.
+Measurement collapses the quantum state into a classical bit.
+Below are the 8-qubit production circuit and a 3-qubit visualization.
 """))
 
-# Cell 4: Code 1-qubit execution
-cells.append(nbf.v4.new_code_cell("""# Build and draw a 1-qubit circuit (the quantum coin)
-qc_1q = build_qrng_circuit(n_qubits=1)
-fig_1q = qc_1q.draw("mpl")
+cells.append(nbf.v4.new_code_cell("""# 8-qubit production circuit
+qc = build_qrng_circuit(n_qubits=8)
+fig_8q = qc.draw("mpl", filename="circuit_diagram.png")
 plt.show()
 
-# Sample a single coin flip
-coin_flip = generate_bits(n_bits=1, n_qubits=1, backend="ideal")
-print(f"Single quantum coin flip result: {coin_flip[0]}")
-"""))
-
-# Cell 5: Markdown multi-qubit circuits
-cells.append(nbf.v4.new_markdown_cell("""## 2. Multi-Qubit Register Diagrams
-To generate bytes (integers from $0$ to $255$), we operate registers of independent qubits in parallel.
-Below is a beginner-friendly 3-qubit circuit diagram, followed by the full 8-qubit production circuit.
-"""))
-
-# Cell 6: Code multi-qubit drawing
-cells.append(nbf.v4.new_code_cell("""# 3-qubit circuit (clear visualization for beginners)
+# 3-qubit visualization
 qc_3q = build_qrng_circuit(n_qubits=3)
 fig_3q = qc_3q.draw("mpl")
 plt.show()
 
-# 8-qubit production circuit (used for generating 8-bit bytes)
-qc_8q = build_qrng_circuit(n_qubits=8)
-fig_8q = qc_8q.draw("mpl")
-plt.show()
+# Closing check: qc.num_qubits == 8, circuit has 8 h and 8 measure operations
+ops = qc.count_ops()
+assert qc.num_qubits == 8, f"Expected 8 qubits, got {qc.num_qubits}"
+assert ops.get("h", 0) == 8, f"Expected 8 h operations, got {ops.get('h')}"
+assert ops.get("measure", 0) == 8, f"Expected 8 measure operations, got {ops.get('measure')}"
+print("Circuit verification passed: 8 qubits, 8 Hadamard gates, 8 measurements.")
 """))
 
-# Cell 7: Markdown Bit and Number generation
-cells.append(nbf.v4.new_markdown_cell("""## 3. Bitstream and Integer Generation (Ideal Simulator)
-We generate 1,000 bits using Qiskit Aer's ideal simulator with shot memory (`memory=True`) to preserve sequential ordering.
-Then, we convert contiguous 8-bit chunks into numbers in the range $[0, 255]$.
+# Step 4: Key cell (markdown + code)
+cells.append(nbf.v4.new_markdown_cell("""### Step 4: IBM Quantum Authentication
+Paste your IBM key when prompted. It is never saved in the notebook.
 """))
 
-# Cell 8: Code Bit and Number generation
-cells.append(nbf.v4.new_code_cell("""# Generate 1,000 bits using the ideal simulator
-ideal_bits = generate_bits(n_bits=1000, n_qubits=8, backend="ideal")
-print(f"Total bits generated: {len(ideal_bits)}")
-print(f"First 32 bits: {ideal_bits[:32]}")
-
-# Convert the bits into 8-bit integers (0..255)
-numbers = bits_to_numbers(ideal_bits, n_qubits=8)
-print(f"Total 8-bit numbers: {len(numbers)}")
-print(f"First 10 numbers: {numbers[:10]}")
+cells.append(nbf.v4.new_code_cell("""import os, getpass
+if "IBM_QUANTUM_TOKEN" not in os.environ:
+    os.environ["IBM_QUANTUM_TOKEN"] = getpass.getpass("IBM API key: ")
+if "IBM_QUANTUM_INSTANCE" not in os.environ:
+    inst = getpass.getpass("IBM instance CRN or name (Enter to skip): ")
+    if inst:
+        os.environ["IBM_QUANTUM_INSTANCE"] = inst
 """))
 
-# Cell 9: Markdown Noise Detective
-cells.append(nbf.v4.new_markdown_cell("""## 4. Noise Detective: Ideal vs. Noisy Simulation
-Real quantum hardware is subject to environmental decoherence and asymmetric readout fidelity.
-Our noise model includes:
-- **Gate error**: 2% depolarizing error on Hadamard gates.
-- **Readout error**: $P(1|0) = 5\\%$, $P(0|1) = 12\\%$. Because physical devices misclassify $|1\\rangle$ as $|0\\rangle$ more often than the reverse, real data shows a slight bias towards $0$.
+# Step 5: Pre-flight (markdown + code)
+cells.append(nbf.v4.new_markdown_cell("""### Step 5: Pre-flight Backend Check
+Authenticate with IBM Quantum, query operational physical devices, and inspect status.
 """))
 
-# Cell 10: Code Noise Detective
-cells.append(nbf.v4.new_code_cell("""# Generate 1,000 noisy bits
-noisy_bits = generate_bits(n_bits=1000, n_qubits=8, backend="noisy")
-
-# Attempt hardware execution if token is present; skip gracefully if not
-hardware_bits = None
-if os.environ.get("IBM_QUANTUM_TOKEN"):
-    try:
-        print("Submitting 1,000-bit job to least-busy IBM Quantum device...")
-        hardware_bits = generate_bits(n_bits=1000, n_qubits=8, backend="hardware")
-        print("Hardware job finished successfully!")
-    except Exception as exc:
-        print(f"Hardware execution skipped: {exc}")
+cells.append(nbf.v4.new_code_cell("""token = os.environ.get("IBM_QUANTUM_TOKEN")
+if not token:
+    print("IBM key not set. Run the key cell first.")
 else:
-    print("IBM_QUANTUM_TOKEN not set. Gracefully skipping real hardware execution.")
+    instance = os.environ.get("IBM_QUANTUM_INSTANCE")
+    channel = os.environ.get("IBM_QUANTUM_CHANNEL") or (
+        "ibm_cloud" if instance and "bluemix" in instance else "ibm_quantum_platform"
+    )
+    service = QiskitRuntimeService(channel=channel, token=token, instance=instance)
+    backend_obj = service.least_busy(operational=True, simulator=False, min_num_qubits=8)
+    status = backend_obj.status()
 
-# Compute fraction of 1s
-ideal_frac = sum(ideal_bits) / len(ideal_bits)
-noisy_frac = sum(noisy_bits) / len(noisy_bits)
-print(f"Ideal Simulator 1s fraction: {ideal_frac:.4f}")
-print(f"Noisy Simulator 1s fraction: {noisy_frac:.4f}")
+    print(f"Target backend: {backend_obj.name}")
+    print(f"Total qubits: {backend_obj.num_qubits}")
+    print(f"Pending jobs: {status.pending_jobs}")
+    print(f"Operational status: {status.operational}")
 
-# Quick comparison bar chart
-labels = ["Ideal Simulator", "Noisy Simulator"]
-fractions = [ideal_frac, noisy_frac]
-colors = ["#2b5c8f", "#d95f02"]
+    # Closing check: backend is real (simulator is False) and operational
+    assert backend_obj.simulator is False, f"Backend {backend_obj.name} must not be a simulator!"
+    assert status.operational is True, f"Backend {backend_obj.name} is not operational!"
+    print("Pre-flight check passed: real, operational physical backend selected.")
+"""))
 
-if hardware_bits is not None:
-    hw_frac = sum(hardware_bits) / len(hardware_bits)
-    labels.append("Real Hardware")
-    fractions.append(hw_frac)
-    colors.append("#7570b3")
-    print(f"Hardware 1s fraction: {hw_frac:.4f}")
+# Step 6: Hardware run (markdown + code)
+cells.append(nbf.v4.new_markdown_cell("""### Step 6: Hardware Execution and Data Persistence
+Execute 1,000 measurements on real physical hardware (125 shots across 8 qubits), retrieve the ordered bitstream, and immediately save to `data/quantum_bits_hardware.json`.
+"""))
 
-plt.figure(figsize=(7, 4))
-bars = plt.bar(labels, fractions, color=colors, width=0.45)
-plt.axhline(0.5, color="red", linestyle="--", label="Ideal Fair Coin (0.50)")
-plt.ylabel("Fraction of 1s")
-plt.ylim(0, 1.0)
-plt.title("Comparison of 1s Frequency (Teaser for Person 2)")
-plt.legend(loc="lower right")
+cells.append(nbf.v4.new_code_cell("""token = os.environ.get("IBM_QUANTUM_TOKEN")
+if not token:
+    print("IBM key not set. Run the key cell first.")
+else:
+    # Generate 1,000 bits directly on physical hardware
+    bits = generate_bits(n_bits=1000, n_qubits=8, backend="hardware")
+    
+    from quantum_engine import LAST_HARDWARE_BACKEND, LAST_HARDWARE_JOB_ID
+    backend_name = LAST_HARDWARE_BACKEND
+    job_id = LAST_HARDWARE_JOB_ID
+    print(f"Measured on backend: {backend_name}")
+    print(f"Hardware job ID: {job_id}")
 
-for bar, frac in zip(bars, fractions):
-    plt.text(bar.get_x() + bar.get_width() / 2, frac + 0.03, f"{frac:.3f}", ha="center", fontweight="bold")
+    # Save immediately after job returns, before plotting
+    out_path = save_bits(bits, "data/quantum_bits_hardware.json", source=backend_name, job_id=job_id, n_qubits=8)
+    print(f"Saved dataset to {out_path}")
 
+    # Closing check: len(bits) == 1000, set(bits) <= {0, 1}, saved file reloads to identical list
+    assert len(bits) == 1000, f"Expected 1000 bits, got {len(bits)}"
+    assert set(bits) <= {0, 1}, "Bits must contain only 0 and 1"
+    reloaded_bits = load_bits("data/quantum_bits_hardware.json")
+    assert reloaded_bits == bits, "Reloaded bits do not match measured bits!"
+    print(f"Hardware execution assertions passed: exact 1,000 bits verified.")
+"""))
+
+# Step 7: Results (markdown + code)
+cells.append(nbf.v4.new_markdown_cell("""### Step 7: Measured Results and Bit-to-Number Conversion
+Group consecutive bits into 8-bit integers ($0..255$), inspect sample values, and plot bit frequency.
+"""))
+
+cells.append(nbf.v4.new_code_cell("""# Load measured bits from dataset
+dataset = load_dataset("data/quantum_bits_hardware.json")
+bits = dataset["bits"]
+
+# Convert to 8-bit numbers
+numbers = bits_to_numbers(bits, n_qubits=8)
+
+# Closing check: len(numbers) == 125, all values in 0..255
+assert len(numbers) == 125, f"Expected 125 numbers, got {len(numbers)}"
+assert all(0 <= n <= 255 for n in numbers), "All numbers must be in 0..255"
+
+print(f"First 32 bits: {bits[:32]}")
+print(f"First 10 numbers: {numbers[:10]}")
+
+count_0 = bits.count(0)
+count_1 = bits.count(1)
+frac_1 = count_1 / len(bits)
+print(f"Measured fraction of 1s: {frac_1:.4f} ({count_1}/{len(bits)})")
+
+# Bar chart of 0s vs 1s
+plt.figure(figsize=(6, 4))
+bars = plt.bar(["0", "1"], [count_0, count_1], color=["#2b5c8f", "#7570b3"], width=0.4)
+plt.xlabel("bit value", fontsize=11)
+plt.ylabel("count", fontsize=11)
+plt.title("Hardware Measured Bit Frequencies", fontsize=12)
+for bar in bars:
+    yval = bar.get_height()
+    plt.text(bar.get_x() + bar.get_width() / 2, yval + 10, f"{yval}", ha="center", fontweight="bold")
 plt.tight_layout()
 plt.show()
 """))
 
-# Cell 11: Markdown Data Persistence
-cells.append(nbf.v4.new_markdown_cell("""## 5. Dataset Persistence and Interface Contract
-We save the generated datasets into the `data/` folder adhering to the contract format so Persons 2 and 3 can use them without requiring Qiskit.
+# Step 8: Takeaway (markdown + code)
+cells.append(nbf.v4.new_markdown_cell("""### Step 8: Measured Summary and Takeaway
+Summary generated strictly by code with f-strings from the measured data.
 """))
 
-# Cell 12: Code Data Persistence
-cells.append(nbf.v4.new_code_cell("""# Save datasets
-save_bits(ideal_bits, "data/quantum_bits_sim.json", source="aer_simulator", n_qubits=8)
-save_bits(noisy_bits, "data/quantum_bits_noisy.json", source="aer_simulator_noisy", n_qubits=8)
-if hardware_bits is not None:
-    save_bits(hardware_bits, "data/quantum_bits_hardware.json", source="ibm_hardware", n_qubits=8)
+cells.append(nbf.v4.new_code_cell("""# Summary generated entirely from measured data
+dataset = load_dataset("data/quantum_bits_hardware.json")
+bits = dataset["bits"]
+backend_name = dataset["source"]
+job_id = dataset["job_id"]
+total_bits = len(bits)
+count_1 = bits.count(1)
+frac_1 = count_1 / total_bits
 
-print("Saved data/quantum_bits_sim.json and data/quantum_bits_noisy.json")
+if frac_1 > 0.5:
+    bias_relation = "above 0.5"
+elif frac_1 < 0.5:
+    bias_relation = "below 0.5"
+else:
+    bias_relation = "equal to 0.5"
 
-# Verification round-trip
-reloaded_bits = load_bits("data/quantum_bits_sim.json")
-assert reloaded_bits == ideal_bits, "Reloaded bits do not match!"
-print(f"Successfully verified round-trip loading of {len(reloaded_bits)} bits!")
+takeaway_text = (
+    f"Measured {total_bits} random bits on quantum processor '{backend_name}' (job ID: {job_id}). "
+    f"The observed fraction of 1s was {frac_1:.4f} ({count_1}/{total_bits}), which is {bias_relation}. "
+    f"By construction, the circuit placed each qubit in an equal superposition via a Hadamard gate and measured it."
+)
+
+print(takeaway_text)
 """))
 
 nb.cells = cells
@@ -168,13 +232,4 @@ nb.cells = cells
 with open("person1_quantum_engine.ipynb", "w", encoding="utf-8") as f:
     nbf.write(nb, f)
 
-print("person1_quantum_engine.ipynb written.")
-
-client = NotebookClient(nb, timeout=180, kernel_name="python3")
-client.execute()
-
-with open("person1_quantum_engine.ipynb", "w", encoding="utf-8") as f:
-    nbf.write(nb, f)
-
-print("Notebook executed top to bottom successfully!")
-
+print("Generated person1_quantum_engine.ipynb adhering strictly to Section 8 spec!")
