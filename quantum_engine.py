@@ -263,3 +263,95 @@ def load_dataset(path: str | Path) -> dict:
     input_path = Path(path)
     with open(input_path, "r", encoding="utf-8") as f:
         return json.load(f)
+
+
+def submit_hardware_job(
+    qc: QuantumCircuit,
+    shots: int = 125,
+) -> tuple[object, str]:
+    """Submit QRNG circuit to the least busy operational hardware backend without blocking.
+
+    Args:
+        qc: QuantumCircuit to execute.
+        shots: Number of repetitions (default 125 for 1,000 bits on 8 qubits).
+
+    Returns:
+        tuple[object, str]: Asynchronous Qiskit Runtime Job and backend name.
+    """
+    token = os.environ.get("IBM_QUANTUM_TOKEN")
+    if not token:
+        raise RuntimeError(
+            "IBM_QUANTUM_TOKEN environment variable is not set."
+        )
+    instance = os.environ.get("IBM_QUANTUM_INSTANCE")
+    channel = os.environ.get("IBM_QUANTUM_CHANNEL") or (
+        "ibm_cloud" if instance and "bluemix" in instance else "ibm_quantum_platform"
+    )
+    service = QiskitRuntimeService(
+        channel=channel,
+        token=token,
+        instance=instance,
+    )
+    backend_obj = service.least_busy(
+        operational=True,
+        simulator=False,
+        min_num_qubits=qc.num_qubits,
+    )
+    pm = generate_preset_pass_manager(backend=backend_obj, optimization_level=1)
+    isa_circuit = pm.run(qc)
+    sampler = Sampler(mode=backend_obj)
+    job = sampler.run([isa_circuit], shots=shots)
+    return job, backend_obj.name
+
+
+def save_live_run(
+    bits: list[int],
+    backend: str,
+    job_id: str,
+    n_qubits: int = DEFAULT_QUBITS,
+    target_dir: str | Path = "data/live_runs",
+) -> tuple[Path, Path]:
+    """Save live quantum execution results to live_runs directory.
+
+    Guarantees that data/quantum_bits_hardware.json cannot be overwritten.
+    Writes:
+      1. live_<backend>_<UTC_timestamp>.json
+      2. latest.json
+
+    Args:
+        bits: Measured binary bits list.
+        backend: Name of the hardware backend.
+        job_id: IBM Quantum job identifier.
+        n_qubits: Qubits evaluated per shot.
+        target_dir: Destination folder (default 'data/live_runs').
+
+    Returns:
+        tuple[Path, Path]: Paths to the timestamped run file and latest.json.
+    """
+    dest = Path(target_dir)
+    dest.mkdir(parents=True, exist_ok=True)
+    utc_timestamp = datetime.utcnow().strftime("%Y%m%dT%H%M%SZ")
+    run_file = dest / f"live_{backend}_{utc_timestamp}.json"
+    latest_file = dest / "latest.json"
+
+    for target in (run_file, latest_file):
+        if target.name == "quantum_bits_hardware.json":
+            raise ValueError(
+                "Refusing to write to protected dataset 'quantum_bits_hardware.json'."
+            )
+
+    payload = {
+        "source": backend,
+        "n_qubits": n_qubits,
+        "n_bits": len(bits),
+        "seed": None,
+        "job_id": job_id,
+        "created": datetime.utcnow().isoformat() + "Z",
+        "bits": bits,
+    }
+
+    for target in (run_file, latest_file):
+        with open(target, "w", encoding="utf-8") as f:
+            json.dump(payload, f, indent=2)
+
+    return run_file, latest_file
