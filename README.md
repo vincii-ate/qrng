@@ -1,163 +1,171 @@
-# Quantum Random Number Generator (QRNG) — Team Handoff & Architecture Guide
+# Quantum Random Number Generator (QRNG)
 
-> **AstraCode Qiskit Fall Fest 2026 | Project 4: Quantum Random Number Generator**  
-> **Component**: Person 1 (Quantum Engine Deliverables & Integration Guide)  
-> **Status**: Completed, verified on physical hardware, and test suite passing.
-
----
-
-## 1. Quick Navigation for Teammates
-
-This project uses quantum mechanical superposition to generate true random bits on real IBM Quantum superconducting hardware, with comparisons against noisy quantum simulations and classical pseudo-random number generators.
-
-### 👤 For Mike (Person 2: Statistical Analysis & Comparison)
-You **do not need Qiskit installed** to perform your analysis.
-- **Your Primary Input Data**: 
-  - [`data/quantum_bits_hardware.json`](data/quantum_bits_hardware.json) — 1,000 bits measured on real physical hardware (`ibm_marrakesh`, job `dbplvroqtr0c738elbe0`, 512 ones). **This is the shared hardware dataset.**
-  - [`data/quantum_bits_noisy.json`](data/quantum_bits_noisy.json) — 1,000 bits from the offline noisy simulator (`aer_noisy`). Provided for the **Noise Detective (+5)** track; the simulator backends in `quantum_engine.py` exist only for offline unit tests and are not primary result datasets.
-- **How to load the datasets in Python (Zero-dependency)**:
-  ```python
-  import json
-
-  # Load real hardware data
-  with open("data/quantum_bits_hardware.json", "r") as f:
-      hw_dataset = json.load(f)
-
-  bits = hw_dataset["bits"]        # list[int] of 1,000 values (0 or 1)
-  backend = hw_dataset["source"]   # 'ibm_marrakesh'
-  job_id = hw_dataset["job_id"]    # 'dbplvroqtr0c738elbe0'
-
-  # Group bits into 8-bit integers (0 to 255)
-  numbers = [
-      int("".join(map(str, bits[i:i + 8])), 2)
-      for i in range(0, len(bits) - 7, 8)
-  ]
-  # len(numbers) == 125, all values in 0..255
-  ```
-- **If you do want to use the module**:
-  ```python
-  from quantum_engine import load_bits, load_dataset, bits_to_numbers
-  bits = load_bits("data/quantum_bits_hardware.json")
-  numbers = bits_to_numbers(bits, n_qubits=8)
-  ```
-- **Recommended Statistical Tests to compare against Python `random`**:
-  1. **Monobit Frequency Test**: Proportion of 1s vs 0s ($p$-value from normal distribution).
-  2. **Runs Test**: Frequency of alternating run lengths (tests independence between successive bits).
-  3. **Shannon Entropy**: Bit entropy $H = -\sum p_i \log_2 p_i$ (target $\approx 1.0$ bit/bit).
-  4. **Autocorrelation Analysis**: Correlation between bit $b_i$ and bit $b_{i+k}$.
+> **AstraCode Qiskit Fall Fest 2026 · Project 4: Quantum Random Number Generator**  
+> **Team**: Temi (Quantum Engine), Mike (Statistical Analysis), Evans (Presentation & Narrative)  
+> **Status**: Full integration complete · Verified on physical quantum processor · 100% test pass rate
 
 ---
 
-### 👤 For Evans (Person 3: Presentation, Storyline & Explanations)
-Here are the core concepts and findings you can present:
-- **Physical Superposition**: We place 8 superconducting qubits into an equal superposition state using Hadamard ($H$) gates:
-  $$H|0\rangle = \frac{|0\rangle + |1\rangle}{\sqrt{2}}$$
-  Measurement collapses the wavefunction with fundamental 50% probability into state $|0\rangle$ or $|1\rangle$.
-- **Circuit Visual**: [`circuit_diagram.png`](circuit_diagram.png) shows the 8-qubit register in parallel.
-- **Hardware Hero Finding (+5)**:
-  - We ran 125 shots $\times$ 8 qubits on the physical quantum processor `ibm_marrakesh`.
-  - Observed 1s count: **512 / 1,000** (**51.20%** ones).
-- **Noise Detective Finding (+5)**:
-  - In [`data/quantum_bits_noisy.json`](data/quantum_bits_noisy.json), we modelled a 2% gate error and asymmetric readout error ($P(0|1) = 12\% > P(1|0) = 5\%$), with the bias coming from readout asymmetry (these noise values are offline simulation assumptions we chose, not measured from a physical device).
-  - Observed 1s count: **464 / 1,000** (**46.40%** ones).
-  - Teachable point: The readout asymmetry naturally biases measured outcomes towards $|0\rangle$, creating an explainable bias in the simulation if uncorrected.
-- **Classical vs. Quantum Randomness**:
-  - Python's `random` uses the Mersenne Twister algorithm (MT19937) — fully deterministic given the 624-word internal state.
-  - Quantum QRNG measurement outcomes are fundamentally non-deterministic according to the Born rule.
+## 1. Project Overview
+
+True randomness is impossible to achieve using deterministic classical algorithms alone. Classical pseudo-random number generators (PRNGs), such as Python's Mersenne Twister (MT19937), produce predictable streams once their internal state is known.
+
+This project harnesses the fundamental unpredictability of quantum mechanics. By preparing 8 superconducting qubits in an equal Hadamard superposition:
+
+$$H|0\rangle = \frac{|0\rangle + |1\rangle}{\sqrt{2}}$$
+
+and measuring them, the wavefunction collapses into truly non-deterministic classical bits according to the Born rule.
+
+### Three Integrated Components
+1. **Quantum Engine (Person 1 · Temi)**: Constructing circuits, non-blocking submission to least-busy IBM Quantum hardware, little-endian bit conversion, offline noise modeling, and unit testing.
+2. **Statistical Suite (Person 2 · Mike)**: Zero-dependency rigorous hypothesis testing (frequency/monobit test, runs test, longest run streak, Shannon entropy, lag-1 autocorrelation).
+3. **Interactive Narrative (Person 3 · Evans)**: Complete educational presentation notebook featuring real-world applications (dice rolling, one-time pad encryption), dynamic comparison tables, and visual charts.
 
 ---
 
-## 2. Repository Layout & Deliverables
+## 2. Verified Hardware Baseline
+
+Our primary shared dataset was collected directly on physical IBM Quantum superconducting hardware:
+
+- **Quantum Processor**: `ibm_marrakesh`
+- **Job ID**: `dbplvroqtr0c738elbe0`
+- **Dataset File**: [`data/quantum_bits_hardware.json`](data/quantum_bits_hardware.json)
+- **Sample Size**: 1,000 bits (125 shots $\times$ 8 qubits)
+- **Measured Balance**: **512 ones** / 488 zeros (51.20% ones)
+
+### Statistical Benchmark Results
+
+| Metric | Hardware QRNG (`ibm_marrakesh`) | Python Baseline (`random`, seed=42) | Offline Noisy Sim (`aer_noisy`) | Target / Meaning |
+|---|---|---|---|---|
+| **Ones Count** | **512 / 1,000** | 514 / 1,000 | 464 / 1,000 | ~500 (balanced) |
+| **Monobit $p$-value** | **0.447884** | 0.375921 | 0.022796 | $> 0.01$ (passes test) |
+| **Total Runs** | **507** | 494 | 490 | ~500 (alternation) |
+| **Longest Run Streak** | **10** | 11 | 11 | Short streaks expected |
+| **Shannon Entropy** | **0.9996** bits/bit | 0.9994 bits/bit | 0.9963 bits/bit | Target 1.0 (max uncertainty) |
+| **Lag-1 Autocorrelation**| **-0.0136** | 0.0122 | 0.0159 | Target 0.0 (independent bits) |
+
+The shared hardware dataset is immutable (`data/quantum_bits_hardware.json`, SHA256: `FC504841F9B4722829CC90CAEB56E489BB3F9F790E844897A5F2240A24D2C0BB`).
+
+---
+
+## 3. Quick Start & How to Run
+
+### Option A: Explore the Final Presentation Notebook (Zero Qiskit Required)
+The final presentation notebook [`qrng_final.ipynb`](qrng_final.ipynb) operates entirely offline on the pre-collected JSON dataset using only `matplotlib` and Python's standard library. No IBM Quantum token or Qiskit install is necessary.
+
+```bash
+# 1. Activate your virtual environment and launch the notebook
+jupyter notebook qrng_final.ipynb
+```
+
+#### Saved vs. Live Switch
+At the very top of `qrng_final.ipynb`, you can toggle between datasets:
+```python
+DATASET = "saved"  # Default: loads verified baseline (ibm_marrakesh, 512 ones)
+# or
+DATASET = "live"   # Loads fresh live run from data/live_runs/latest.json (with safe fallback)
+```
+
+---
+
+### Option B: Run a Live Quantum Hardware Demo
+To submit a live job to physical IBM Quantum hardware without blocking:
+
+1. Open [`live_hardware_demo.ipynb`](live_hardware_demo.ipynb).
+2. Enter your IBM Quantum API token in Step 1 (uses secure `getpass`; key is never printed or saved in plaintext).
+3. Execute **Step 3 ("Submit Live Hardware Job")**: Asynchronously submits 125 shots to the least-busy operational backend and returns immediately.
+4. Execute **Step 4 ("Check Job Status")**: Re-runnable polling cell tracking queue position and execution status.
+5. Execute **Step 5 ("Save Results")**: Automatically extracts bits (with little-endian reversal), renders frequency charts, and saves to `data/live_runs/latest.json`.
+6. Return to `qrng_final.ipynb` with `DATASET = "live"` to analyze your fresh quantum data!
+
+---
+
+### Option C: Run the Statistical Test Suite Directly
+Mike's statistical analysis script uses only the Python standard library:
+
+```bash
+python statistical_comparison.py
+```
+
+To run against a custom or live dataset:
+```python
+import statistical_comparison as sc
+report = sc.build_report(hardware_path="data/live_runs/latest.json")
+sc.print_report(report)
+```
+
+---
+
+### Option D: Run Offline Unit Tests
+Run the automated test suite covering quantum circuit construction, bit conversions, dataset formatting, and noise modeling:
+
+```bash
+python -m pytest -q test_quantum_engine.py
+# Output: 9 passed
+```
+
+---
+
+## 4. Repository Layout
 
 ```text
 qrng/
-├── README.md                         # Detailed team navigation & integration guide (this file)
-├── README_person1.md                 # Original concise 10-line handoff note
-├── quantum_engine.py                 # Core reusable module (hardware, offline helpers, contract)
-├── person1_quantum_engine.ipynb      # Hardware-only demo notebook (clean, asserted steps)
-├── circuit_diagram.png               # High-res 8-qubit Hadamard & measurement diagram
-├── test_quantum_engine.py            # Offline test suite (9 test cases, 100% passing)
-├── requirements.txt                  # Pinned dependencies (qiskit 2.6.2, qiskit-aer, qiskit-ibm-runtime)
+├── README.md                         # Comprehensive project documentation (this file)
+├── README_person1.md                 # Original quantum engine component documentation
+├── qrng_final.ipynb                  # Primary presentation notebook (interactive narrative & stats)
+├── live_hardware_demo.ipynb          # Live hardware demo (non-blocking QPU submit, queue check, save)
+├── person1_quantum_engine.ipynb      # Person 1 quantum engine demonstration notebook
+├── quantum_engine.py                 # Core engine module (circuits, hardware submission, live storage)
+├── statistical_comparison.py         # Statistical analysis module (monobit, runs, entropy, autocorrelation)
+├── test_quantum_engine.py            # Automated test suite (9 unit tests, 100% passing)
+├── circuit_diagram.png               # High-res 8-qubit Hadamard & measurement circuit diagram
+├── requirements.txt                  # Pinned dependencies (Qiskit 2.6.2, qiskit-aer, qiskit-ibm-runtime)
 └── data/
     ├── quantum_bits_hardware.json    # Real IBM QPU dataset (ibm_marrakesh, 1,000 bits, 512 ones)
-    └── quantum_bits_noisy.json       # Noisy simulator dataset (aer_noisy, 1,000 bits)
+    └── quantum_bits_noisy.json       # Offline noisy simulator dataset (aer_noisy, 1,000 bits)
 ```
 
 ---
 
-## 3. Data Format Specification
+## 5. Noise Detective & Error Modeling
 
-Both dataset files in `data/` conform to this exact JSON schema:
+For the **Noise Detective (+5)** track, we modeled realistic physical noise channels in [`data/quantum_bits_noisy.json`](data/quantum_bits_noisy.json):
+- **Depolarizing Gate Error**: 2% depolarizing error on single-qubit gates.
+- **Asymmetric Readout Error**: $P(0|1) = 12\%$ versus $P(1|0) = 5\%$.
 
-```json
-{
-  "source": "ibm_marrakesh",
-  "n_qubits": 8,
-  "n_bits": 1000,
-  "seed": null,
-  "job_id": "dbplvroqtr0c738elbe0",
-  "created": "2026-11-10T20:45:30.123456",
-  "bits": [0, 1, 0, 1, 1, 0, 0, 1, ...]
-}
-```
+Because energy relaxation makes state decay $|1\rangle \to |0\rangle$ more probable than excitation $|0\rangle \to |1\rangle$, physical measurement apparatuses frequently exhibit asymmetric readout error. In our noisy simulation, this creates an explainable bias towards zero (**464 ones / 1,000 bits**; monobit $p = 0.022796$).
 
-| Key | Type | Description |
+*(Note: Simulator backends in `quantum_engine.py` exist for offline benchmarking and unit tests; `data/quantum_bits_noisy.json` illustrates noise effects and is not a primary result dataset).*
+
+---
+
+## 6. Public API Reference
+
+### `quantum_engine.py`
+| Function | Parameters | Description |
 |---|---|---|
-| `source` | `str` | Name of the hardware backend (`"ibm_marrakesh"`) or simulator (`"aer_noisy"`). |
-| `n_qubits` | `int` | Number of parallel qubits evaluated per shot (8). |
-| `n_bits` | `int` | Total count of measured binary digits (1,000). |
-| `seed` | `int` \| `null` | Random seed (`null` for genuine physical quantum randomness). |
-| `job_id` | `str` \| `null` | IBM Quantum job identifier (`"dbplvroqtr0c738elbe0"` on hardware). |
-| `created` | `str` | ISO 8601 timestamp of data generation. |
-| `bits` | `list[int]` | Plain Python list containing only binary values `0` and `1`. |
+| `build_qrng_circuit(n_qubits=8)` | `n_qubits: int` | Builds parallel Hadamard superposition circuit with measurements. |
+| `submit_hardware_job(qc, shots=125)`| `qc: QuantumCircuit, shots: int` | Non-blocking submission to least-busy operational IBM Quantum QPU. |
+| `save_live_run(bits, backend, job_id, ...)` | `bits, backend, job_id, ...` | Persists live data to `data/live_runs/`; strictly protects `quantum_bits_hardware.json`. |
+| `bits_to_numbers(bits, n_qubits=8)` | `bits: list[int], n_qubits: int` | Converts contiguous $n$-bit slices into integers ($0..2^n-1$). |
+| `generate_bits(...)` | `n_bits, n_qubits, backend, seed` | Offline bit generator (supports `"hardware"`, `"ideal"`, `"noisy"`). |
+| `load_dataset(path)` | `path: str \| Path` | Loads JSON dataset dictionary with metadata and bit list. |
 
-> **Bit Ordering Note**: Qiskit outputs shot strings in little-endian order (qubit 0 at the far right). In `quantum_engine.py`, each shot string was reversed with `[::-1]` so character index $i$ corresponds directly to qubit register $i$.
-
----
-
-## 4. Environment Setup (If you want to run quantum code)
-
-If you only analyze the JSON data, Python's standard library is all you need.
-
-If you wish to execute the quantum engine or run the test suite locally:
-
-```bash
-# 1. Clone repository & enter directory
-git clone https://github.com/vincii-ate/qrng.git
-cd qrng
-
-# 2. Create and activate virtual environment
-python -m venv .venv
-# On Windows (PowerShell):
-.venv\Scripts\activate
-# On Linux / macOS:
-source .venv/bin/activate
-
-# 3. Install pinned dependencies
-pip install -r requirements.txt
-
-# 4. Run automated test suite
-python -m unittest test_quantum_engine.py
-```
-
----
-
-## 5. Public Functions in `quantum_engine.py`
-
-| Function | Signature | Description |
+### `statistical_comparison.py`
+| Function | Parameters | Description |
 |---|---|---|
-| `build_qrng_circuit(n_qubits=8)` | `(n_qubits: int) -> QuantumCircuit` | Constructs circuit applying $H$ on all qubits followed by measurement. |
-| `generate_bits(...)` | `(n_bits=1000, n_qubits=8, backend="hardware", seed=None) -> list[int]` | Generates exact bitstream. `backend` accepts `"hardware"`, `"ideal"`, or `"noisy"`. |
-| `bits_to_numbers(bits, n_qubits=8)` | `(bits: list[int], n_qubits: int) -> list[int]` | Converts contiguous chunks of `n_qubits` bits into integers ($0..2^{n}-1$). |
-| `save_bits(bits, path, **metadata)` | `(bits: list[int], path: str|Path, **metadata) -> Path` | Saves bits and metadata to JSON matching the contract schema. |
-| `load_bits(path)` | `(path: str|Path) -> list[int]` | Reads and returns only the integer bit list from a JSON file. |
-| `load_dataset(path)` | `(path: str|Path) -> dict` | Reads the entire JSON object including metadata and bits. |
+| `monobit_frequency_test(bits)` | `bits: list[int]` | Calculates proportion of ones, $z$-score, and two-tailed $p$-value. |
+| `runs_test(bits)` | `bits: list[int]` | Counts runs, transitions, and run-length frequency distribution. |
+| `longest_run(bits)` | `bits: list[int]` | Determines the length of the longest streak of identical bits. |
+| `shannon_entropy(bits)` | `bits: list[int]` | Computes empirical binary Shannon entropy ($-\sum p_i \log_2 p_i$). |
+| `autocorrelation(bits, lag=1)` | `bits: list[int], lag: int` | Calculates sample Pearson autocorrelation at specified lag. |
+| `generate_python_random_bits(n, seed)` | `n: int, seed: int` | Generates reproducible classical PRNG baseline (seed=42). |
+| `build_report(hardware_path=...)` | `hardware_path, noisy_path` | Builds structured dictionary comparing hardware, noisy sim, and Python baseline. |
 
 ---
 
-## 6. Hackathon Bonus Points Tracked
+## 7. Hackathon Bonus Tracks Addressed
 
-- **Hardware Hero (+5)**: Real physical quantum computer execution demonstrated and recorded on `ibm_marrakesh` (Job `dbplvroqtr0c738elbe0`).
-- **Noise Detective (+5)**: Explainable noise model implemented and benchmarked in [`data/quantum_bits_noisy.json`](data/quantum_bits_noisy.json).
-- **Clean Code (+5)**: Type hints, docstrings, strict input validation, zero credentials committed, and 100% test pass rate.
-
+- **Hardware Hero (+5)**: Real physical quantum computer execution demonstrated and recorded on `ibm_marrakesh` (Job `dbplvroqtr0c738elbe0`, 512 ones / 1,000 bits).
+- **Noise Detective (+5)**: Explainable noise model implemented, simulated, and benchmarked against physical hardware and classical baselines.
+- **Clean Code (+5)**: Type annotations, complete docstrings, comprehensive assertions, zero committed credentials, and a 100% passing test suite.
