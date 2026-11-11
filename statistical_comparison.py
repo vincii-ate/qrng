@@ -206,10 +206,13 @@ def compare_against_python_random(bits: list[int], python_bits: list[int]) -> di
     }
 
 
-def build_report() -> dict:
+def build_report(
+    hardware_path: str | Path = HARDWARE_PATH,
+    noisy_path: str | Path = NOISY_PATH,
+) -> dict:
     """Load all project datasets and build the comparison report."""
-    hardware_dataset = load_dataset(HARDWARE_PATH)
-    noisy_dataset = load_dataset(NOISY_PATH)
+    hardware_dataset = load_dataset(hardware_path)
+    noisy_dataset = load_dataset(noisy_path)
     hardware_bits = hardware_dataset["bits"]
     noisy_bits = noisy_dataset["bits"]
 
@@ -287,9 +290,12 @@ def print_report(report: dict) -> None:
                 print(f"  {key}: {value}")
 
 
-def main() -> None:
+def main(
+    hardware_path: str | Path = HARDWARE_PATH,
+    noisy_path: str | Path = NOISY_PATH,
+) -> None:
     """Generate the requested statistical comparison report."""
-    report = build_report()
+    report = build_report(hardware_path=hardware_path, noisy_path=noisy_path)
     print_report(report)
 
 
