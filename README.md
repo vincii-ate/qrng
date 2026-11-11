@@ -13,8 +13,8 @@ This project uses quantum mechanical superposition to generate true random bits 
 ### 👤 For Mike (Person 2: Statistical Analysis & Comparison)
 You **do not need Qiskit installed** to perform your analysis.
 - **Your Primary Input Data**: 
-  - [`data/quantum_bits_hardware.json`](file:///c:/Users/temi/.gemini/antigravity/scratch/qrng/data/quantum_bits_hardware.json) — 1,000 bits measured on real physical hardware (`ibm_fez`, job `dbpl46oqtr0c738ek6hg`).
-  - [`data/quantum_bits_noisy.json`](file:///c:/Users/temi/.gemini/antigravity/scratch/qrng/data/quantum_bits_noisy.json) — 1,000 bits from our noise model (`aer_noisy`) for the **Noise Detective (+5)** track.
+  - [`data/quantum_bits_hardware.json`](data/quantum_bits_hardware.json) — 1,000 bits measured on real physical hardware (`ibm_marrakesh`, job `dbplvroqtr0c738elbe0`, 512 ones). **This is the shared hardware dataset.**
+  - [`data/quantum_bits_noisy.json`](data/quantum_bits_noisy.json) — 1,000 bits from the offline noisy simulator (`aer_noisy`). Provided for the **Noise Detective (+5)** track; the simulator backends in `quantum_engine.py` exist only for offline unit tests and are not primary result datasets.
 - **How to load the datasets in Python (Zero-dependency)**:
   ```python
   import json
@@ -24,8 +24,8 @@ You **do not need Qiskit installed** to perform your analysis.
       hw_dataset = json.load(f)
 
   bits = hw_dataset["bits"]        # list[int] of 1,000 values (0 or 1)
-  backend = hw_dataset["source"]   # 'ibm_fez'
-  job_id = hw_dataset["job_id"]    # 'dbpl46oqtr0c738ek6hg'
+  backend = hw_dataset["source"]   # 'ibm_marrakesh'
+  job_id = hw_dataset["job_id"]    # 'dbplvroqtr0c738elbe0'
 
   # Group bits into 8-bit integers (0 to 255)
   numbers = [
@@ -53,15 +53,14 @@ Here are the core concepts and findings you can present:
 - **Physical Superposition**: We place 8 superconducting qubits into an equal superposition state using Hadamard ($H$) gates:
   $$H|0\rangle = \frac{|0\rangle + |1\rangle}{\sqrt{2}}$$
   Measurement collapses the wavefunction with fundamental 50% probability into state $|0\rangle$ or $|1\rangle$.
-- **Circuit Visual**: [`circuit_diagram.png`](file:///c:/Users/temi/.gemini/antigravity/scratch/qrng/circuit_diagram.png) shows the 8-qubit register in parallel.
+- **Circuit Visual**: [`circuit_diagram.png`](circuit_diagram.png) shows the 8-qubit register in parallel.
 - **Hardware Hero Finding (+5)**:
-  - We ran 125 shots $\times$ 8 qubits on the physical 156-qubit Heron processor `ibm_fez`.
-  - Observed 1s count: **502 / 1,000** (**50.20%** ones).
-  - This demonstrates active readout mitigation and dynamical decoupling calibration on current IBM hardware.
+  - We ran 125 shots $\times$ 8 qubits on the physical quantum processor `ibm_marrakesh`.
+  - Observed 1s count: **512 / 1,000** (**51.20%** ones).
 - **Noise Detective Finding (+5)**:
-  - In [`data/quantum_bits_noisy.json`](file:///c:/Users/temi/.gemini/antigravity/scratch/qrng/data/quantum_bits_noisy.json), we simulated physical relaxation ($T_1$) and readout asymmetry ($P(0|1) = 12\% > P(1|0) = 5\%$).
+  - In [`data/quantum_bits_noisy.json`](data/quantum_bits_noisy.json), we modelled a 2% gate error and asymmetric readout error ($P(0|1) = 12\% > P(1|0) = 5\%$), with the bias coming from readout asymmetry (these noise values are offline simulation assumptions we chose, not measured from a physical device).
   - Observed 1s count: **464 / 1,000** (**46.40%** ones).
-  - Teachable point: Physical qubits naturally decay towards $|0\rangle$ due to thermalization with the environment, creating an explainable physical bias if uncorrected.
+  - Teachable point: The readout asymmetry naturally biases measured outcomes towards $|0\rangle$, creating an explainable bias in the simulation if uncorrected.
 - **Classical vs. Quantum Randomness**:
   - Python's `random` uses the Mersenne Twister algorithm (MT19937) — fully deterministic given the 624-word internal state.
   - Quantum QRNG measurement outcomes are fundamentally non-deterministic according to the Born rule.
@@ -80,7 +79,7 @@ qrng/
 ├── test_quantum_engine.py            # Offline test suite (9 test cases, 100% passing)
 ├── requirements.txt                  # Pinned dependencies (qiskit 2.6.2, qiskit-aer, qiskit-ibm-runtime)
 └── data/
-    ├── quantum_bits_hardware.json    # Real IBM QPU dataset (ibm_fez, 1,000 bits)
+    ├── quantum_bits_hardware.json    # Real IBM QPU dataset (ibm_marrakesh, 1,000 bits, 512 ones)
     └── quantum_bits_noisy.json       # Noisy simulator dataset (aer_noisy, 1,000 bits)
 ```
 
@@ -92,11 +91,11 @@ Both dataset files in `data/` conform to this exact JSON schema:
 
 ```json
 {
-  "source": "ibm_fez",
+  "source": "ibm_marrakesh",
   "n_qubits": 8,
   "n_bits": 1000,
   "seed": null,
-  "job_id": "dbpl46oqtr0c738ek6hg",
+  "job_id": "dbplvroqtr0c738elbe0",
   "created": "2026-11-10T20:45:30.123456",
   "bits": [0, 1, 0, 1, 1, 0, 0, 1, ...]
 }
@@ -104,11 +103,11 @@ Both dataset files in `data/` conform to this exact JSON schema:
 
 | Key | Type | Description |
 |---|---|---|
-| `source` | `str` | Name of the hardware backend (`"ibm_fez"`) or simulator (`"aer_noisy"`). |
+| `source` | `str` | Name of the hardware backend (`"ibm_marrakesh"`) or simulator (`"aer_noisy"`). |
 | `n_qubits` | `int` | Number of parallel qubits evaluated per shot (8). |
 | `n_bits` | `int` | Total count of measured binary digits (1,000). |
 | `seed` | `int` \| `null` | Random seed (`null` for genuine physical quantum randomness). |
-| `job_id` | `str` \| `null` | IBM Quantum job identifier (`"dbpl46oqtr0c738ek6hg"` on hardware). |
+| `job_id` | `str` \| `null` | IBM Quantum job identifier (`"dbplvroqtr0c738elbe0"` on hardware). |
 | `created` | `str` | ISO 8601 timestamp of data generation. |
 | `bits` | `list[int]` | Plain Python list containing only binary values `0` and `1`. |
 
@@ -158,7 +157,7 @@ python -m unittest test_quantum_engine.py
 
 ## 6. Hackathon Bonus Points Tracked
 
-- **Hardware Hero (+5)**: Real physical quantum computer execution demonstrated and recorded on `ibm_fez` (Job `dbpl46oqtr0c738ek6hg`).
-- **Noise Detective (+5)**: Explainable noise model implemented and benchmarked in [`data/quantum_bits_noisy.json`](file:///c:/Users/temi/.gemini/antigravity/scratch/qrng/data/quantum_bits_noisy.json).
+- **Hardware Hero (+5)**: Real physical quantum computer execution demonstrated and recorded on `ibm_marrakesh` (Job `dbplvroqtr0c738elbe0`).
+- **Noise Detective (+5)**: Explainable noise model implemented and benchmarked in [`data/quantum_bits_noisy.json`](data/quantum_bits_noisy.json).
 - **Clean Code (+5)**: Type hints, docstrings, strict input validation, zero credentials committed, and 100% test pass rate.
 
