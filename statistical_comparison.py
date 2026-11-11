@@ -94,6 +94,12 @@ def run_length_distribution(bits: list[int]) -> dict[int, int]:
     return dict(sorted(Counter(lengths).items()))
 
 
+def longest_run(bits: list[int]) -> int:
+    """Return the length of the longest streak of identical bits."""
+    dist = run_length_distribution(bits)
+    return max(dist.keys()) if dist else 0
+
+
 def monobit_frequency_test(bits: list[int]) -> dict:
     """Perform the monobit frequency test using a standard normal approximation."""
     n = len(bits)
@@ -104,7 +110,7 @@ def monobit_frequency_test(bits: list[int]) -> dict:
     zeros = n - ones
     p_hat = ones / n
 
-    # For a fair coin, the test statistic is approximately normal.
+    # Under the null hypothesis of an unbiased binary source, the test statistic is approximately normal.
     # z = |2*ones - n| / sqrt(n)
     z_score = abs(2 * ones - n) / math.sqrt(n)
     p_value = 2 * (1.0 - NormalDist().cdf(z_score))
@@ -176,6 +182,7 @@ def summarize_dataset(label: str, bits: list[int]) -> dict:
         "entropy": shannon_entropy(bits),
         "monobit": monobit_frequency_test(bits),
         "runs": runs_test(bits),
+        "longest_run": longest_run(bits),
         "autocorrelation_lag_1": autocorrelation(bits, lag=1),
         "first_numbers": numbers[:10],
     }
@@ -192,6 +199,8 @@ def compare_against_python_random(bits: list[int], python_bits: list[int]) -> di
         "difference_in_proportion": q_summary["proportion_ones"] - py_summary["proportion_ones"],
         "qrng_entropy": q_summary["entropy"],
         "python_entropy": py_summary["entropy"],
+        "qrng_longest_run": q_summary["longest_run"],
+        "python_longest_run": py_summary["longest_run"],
         "qrng_lag_1_autocorrelation": q_summary["autocorrelation_lag_1"],
         "python_lag_1_autocorrelation": py_summary["autocorrelation_lag_1"],
     }
@@ -225,6 +234,7 @@ def build_report() -> dict:
             "entropy": shannon_entropy(python_bits),
             "monobit": monobit_frequency_test(python_bits),
             "runs": runs_test(python_bits),
+            "longest_run": longest_run(python_bits),
             "autocorrelation_lag_1": autocorrelation(python_bits, lag=1),
         },
         "comparisons": {
@@ -252,6 +262,7 @@ def print_report(report: dict) -> None:
         print(f"Monobit z-score: {entry['monobit']['z_score']:.4f}")
         print(f"Monobit p-value: {entry['monobit']['p_value']:.6f}")
         print(f"Total runs: {entry['runs']['total_runs']}")
+        print(f"Longest run: {entry['longest_run']}")
         print(f"Transition rate: {entry['runs']['transition_rate']:.4f}")
         print(f"Lag-1 autocorrelation: {entry['autocorrelation_lag_1']:.4f}")
         print(f"First 10 8-bit numbers: {entry['first_numbers'][:10]}")
@@ -262,6 +273,8 @@ def print_report(report: dict) -> None:
     print(f"Shannon entropy: {report['python_random_baseline']['entropy']:.4f}")
     print(f"Monobit z-score: {report['python_random_baseline']['monobit']['z_score']:.4f}")
     print(f"Monobit p-value: {report['python_random_baseline']['monobit']['p_value']:.6f}")
+    print(f"Total runs: {report['python_random_baseline']['runs']['total_runs']}")
+    print(f"Longest run: {report['python_random_baseline']['longest_run']}")
     print(f"Lag-1 autocorrelation: {report['python_random_baseline']['autocorrelation_lag_1']:.4f}")
 
     print("\nCOMPARISON AGAINST PYTHON RANDOM")
