@@ -2,7 +2,8 @@
 
 > **AstraCode Qiskit Fall Fest 2026 · Project 4: Quantum Random Number Generator**  
 > **Team**: Temi (Quantum Engine), Mike (Statistical Analysis), Evans (Presentation & Narrative)  
-> **Status**: Full integration complete · Verified on physical quantum processor · 100% test pass rate
+> **Status**: Full integration complete · Verified on physical quantum processor · 100% test pass rate  
+> **Submission files:** main notebook HEHA QRNG Hackathon Notebook.ipynb (runs on its own, no key needed).The other notebooks are earlier working versions.
 
 ---
 
