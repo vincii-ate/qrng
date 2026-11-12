@@ -3,24 +3,24 @@
 > **AstraCode Qiskit Fall Fest 2026 · Project 4: Quantum Random Number Generator**  
 > **Team**: Temi (Quantum Engine), Mike (Statistical Analysis), Evans (Presentation & Narrative)  
 > **Status**: Full integration complete · Verified on physical quantum processor · 100% test pass rate  
-> **Submission files:** main notebook HEHA QRNG Hackathon Notebook.ipynb (runs on its own, no key needed).The other notebooks are earlier working versions.
+> **Submission files:** Main notebook [`HEHA QRNG Hackathon Notebook.ipynb`](HEHA%20QRNG%20Hackathon%20Notebook.ipynb) (runs on its own, no key needed). The other notebooks are earlier working versions.
 
 ---
 
 ## 1. Project Overview
 
-True randomness is impossible to achieve using deterministic classical algorithms alone. Classical pseudo-random number generators (PRNGs), such as Python's Mersenne Twister (MT19937), produce predictable streams once their internal state is known.
+True randomness cannot be generated through deterministic classical algorithms alone. Classical pseudo-random number generators (PRNGs), such as Python's default Mersenne Twister (MT19937), produce completely predictable sequences once their internal state is determined.
 
 This project harnesses the fundamental unpredictability of quantum mechanics. By preparing 8 superconducting qubits in an equal Hadamard superposition:
 
 $$H|0\rangle = \frac{|0\rangle + |1\rangle}{\sqrt{2}}$$
 
-and measuring them, the wavefunction collapses into truly non-deterministic classical bits according to the Born rule.
+and performing projective measurements, the wavefunction collapses into truly non-deterministic classical bits according to the Born rule.
 
-### Three Integrated Components
-1. **Quantum Engine (Person 1 · Temi)**: Constructing circuits, non-blocking submission to least-busy IBM Quantum hardware, little-endian bit conversion, offline noise modeling, and unit testing.
-2. **Statistical Suite (Person 2 · Mike)**: Zero-dependency rigorous hypothesis testing (frequency/monobit test, runs test, longest run streak, Shannon entropy, lag-1 autocorrelation).
-3. **Interactive Narrative (Person 3 · Evans)**: Complete educational presentation notebook featuring real-world applications (dice rolling, one-time pad encryption), dynamic comparison tables, and visual charts.
+### Three Integrated Roles
+1. **Quantum Engine (Person 1 · Temi)**: Constructing circuits, non-blocking asynchronous job submission to the least-busy IBM Quantum hardware, little-endian bit conversion, offline noise modeling, and unit testing.
+2. **Statistical Suite (Person 2 · Mike)**: Zero-dependency hypothesis testing (frequency/monobit test, runs test, longest run streak, Shannon entropy, lag-1 autocorrelation).
+3. **Interactive Narrative (Person 3 · Evans)**: Comprehensive educational presentation notebooks featuring real-world applications (dice rolling, one-time pad encryption), dynamic comparison tables, and visual charts.
 
 ---
 
@@ -51,16 +51,16 @@ The shared hardware dataset is immutable (`data/quantum_bits_hardware.json`, SHA
 
 ## 3. Quick Start & How to Run
 
-### Option A: Explore the Final Presentation Notebook (Zero Qiskit Required)
-The final presentation notebook [`qrng_final.ipynb`](qrng_final.ipynb) operates entirely offline on the pre-collected JSON dataset using only `matplotlib` and Python's standard library. No IBM Quantum token or Qiskit install is necessary.
+### Option A: Run the Primary Submission Notebook (Zero Qiskit Required)
+The main submission notebook [`HEHA QRNG Hackathon Notebook.ipynb`](HEHA%20QRNG%20Hackathon%20Notebook.ipynb) (and earlier integrated version [`qrng_final.ipynb`](qrng_final.ipynb)) runs completely self-contained on the pre-collected JSON dataset using only `matplotlib` and Python's standard library. No IBM Quantum token or Qiskit install is necessary.
 
 ```bash
-# 1. Activate your virtual environment and launch the notebook
-jupyter notebook qrng_final.ipynb
+# Launch the main submission notebook
+jupyter notebook "HEHA QRNG Hackathon Notebook.ipynb"
 ```
 
-#### Saved vs. Live Switch
-At the very top of `qrng_final.ipynb`, you can toggle between datasets:
+#### Saved vs. Live Dataset Switch
+In the notebooks, you can easily toggle between datasets:
 ```python
 DATASET = "saved"  # Default: loads verified baseline (ibm_marrakesh, 512 ones)
 # or
@@ -77,7 +77,7 @@ To submit a live job to physical IBM Quantum hardware without blocking:
 3. Execute **Step 3 ("Submit Live Hardware Job")**: Asynchronously submits 125 shots to the least-busy operational backend and returns immediately.
 4. Execute **Step 4 ("Check Job Status")**: Re-runnable polling cell tracking queue position and execution status.
 5. Execute **Step 5 ("Save Results")**: Automatically extracts bits (with little-endian reversal), renders frequency charts, and saves to `data/live_runs/latest.json`.
-6. Return to `qrng_final.ipynb` with `DATASET = "live"` to analyze your fresh quantum data!
+6. Return to `HEHA QRNG Hackathon Notebook.ipynb` or `qrng_final.ipynb` with `DATASET = "live"` to analyze your fresh quantum data!
 
 ---
 
@@ -112,10 +112,11 @@ python -m pytest -q test_quantum_engine.py
 ```text
 qrng/
 ├── README.md                         # Comprehensive project documentation (this file)
-├── README_person1.md                 # Original quantum engine component documentation
-├── qrng_final.ipynb                  # Primary presentation notebook (interactive narrative & stats)
+├── HEHA QRNG Hackathon Notebook.ipynb # Main submission notebook (complete lab, self-contained, no key needed)
+├── qrng_final.ipynb                  # Presentation notebook (interactive narrative, dice & one-time pad)
 ├── live_hardware_demo.ipynb          # Live hardware demo (non-blocking QPU submit, queue check, save)
 ├── person1_quantum_engine.ipynb      # Person 1 quantum engine demonstration notebook
+├── README_person1.md                 # Quantum engine component documentation
 ├── quantum_engine.py                 # Core engine module (circuits, hardware submission, live storage)
 ├── statistical_comparison.py         # Statistical analysis module (monobit, runs, entropy, autocorrelation)
 ├── test_quantum_engine.py            # Automated test suite (9 unit tests, 100% passing)
